@@ -27,9 +27,12 @@ ride_stamps <- ride_stamps %>%
 ride_stamps <- ride_stamps %>%
   mutate(timestamp3 = ymd_hms(as.character(timestamp)))
 
-# spreading the event column
-# ride_stamps2 <- ride_stamps %>%
-#    spread(key = event, value = timestamp2)
+# mean times prep, hms::as.hms doesn't account for timezones,
+# leading to a loss of 4 hours, this is a preemptive measure
+four_hours <- 60 * 60 * 4 # four hours in seconds
+ride_stamps <- ride_stamps %>%
+  mutate(timestamp4 = timestamp3 + four_hours) %>%
+  mutate(times = hms::as.hms(timestamp4))
 
 # -----------------------------------------------------------
 #           D R I V E R   L I F E T I M E   V A L U E   
@@ -138,7 +141,9 @@ cdf %>%
 
 # To determine the most important driver lifetime value factors
 # a linear regression is being used with the driver lifetime value
-# as the response variable and the factors as the response
+# as the response variable
+
+### Data Cleaning + Data Prep
 
 # factor generation:
   # time driver has been with Lyft
@@ -156,47 +161,48 @@ cdf %>%
       geom_histogram(aes(x = days_with_lyft),
                      color = "white",
                      fill = "indianred1") + 
-      labs(title = "Distribution of Drivers' Times with Lyft") + 
+      labs(title = "Distribution of Drivers' Days with Lyft") + 
       xlab("Days With Lyft") + 
       ylab("Count")
     
+    
   # mean requested times
     requested <- ride_info_drivers %>%
-      select(driver_id, event, timestamp3) %>%
+      select(driver_id, event, times) %>%
       filter(event == "requested_at") %>%
       group_by(driver_id) %>%
-      summarize(requested_mean = mean(timestamp3)) %>%
+      summarize(requested_mean = mean(times)) %>%
       ungroup()
     
   # mean accepted times
     accepted <- ride_info_drivers %>%
-      select(driver_id, event, timestamp3) %>%
+      select(driver_id, event, times) %>%
       filter(event == "accepted_at") %>%
       group_by(driver_id) %>%
-      summarize(accepted_mean = mean(timestamp3)) %>%
+      summarize(accepted_mean = mean(times)) %>%
       ungroup()
     
   # mean arrived times
     arrived <- ride_info_drivers %>%
-      select(driver_id, event, timestamp3) %>%
+      select(driver_id, event, times) %>%
       filter(event == "arrived_at") %>%
       group_by(driver_id) %>%
-      summarize(arrived_mean = mean(timestamp3)) %>%
+      summarize(arrived_mean = mean(times)) %>%
       ungroup()
   
   # mean picked up times
     picked_up <- ride_info_drivers %>%
-      select(driver_id, event, timestamp3) %>%
+      select(driver_id, event, times) %>%
       filter(event == "picked_up_at") %>%
       group_by(driver_id) %>%
-      summarize(picked_up_mean = mean(timestamp3))
+      summarize(picked_up_mean = mean(times))
   
   # mean dropped off times
     dropped_off <- ride_info_drivers %>%
-      select(driver_id, event, timestamp3) %>%
+      select(driver_id, event, times) %>%
       filter(event == "dropped_off_at") %>%
       group_by(driver_id) %>%
-      summarize(dropped_off_mean = mean(timestamp3)) %>%
+      summarize(dropped_off_mean = mean(times)) %>%
       ungroup()
     
   # requested-arrived time lapse
@@ -221,32 +227,60 @@ cdf %>%
     requested_dropped_off <- requested_dropped_off %>%
       mutate(requested_dropped_off = dropped_off_mean - requested_mean) %>%
       select(driver_id, requested_dropped_off) 
-  
-  # preferred month
-    month <- accepted %>%
-      mutate(pref_month = month(accepted_mean)) %>%
-      select(driver_id, pref_month)
+
+  # mean months   
+  month <- ride_info_drivers %>%
+    filter(event == "accepted_at") %>%
+    select(driver_id, timestamp3) %>%
+    mutate(month = month(timestamp3)) %>%
+    group_by(driver_id) %>%
+    summarize(top_month = mean(month)) %>%
+    ungroup()
     
   # day/night
-    day_night <- accepted %>%
-      mutate(hour = hour(accepted_mean)) %>%
+    day_night <- ride_info_drivers %>%
+      filter(event == "accepted_at") %>%
+      select(driver_id, timestamp3) %>%
+      mutate(hour = hour(timestamp3)) %>%
       mutate(day_night = case_when((hour >= 6 & hour < 12) ~ "morning",
                                    (hour >= 12 & hour < 18) ~ "afternoon",
                                    (hour < 6 ) ~ "night",
                                    TRUE ~ "evening"
                                    )) %>%
       mutate(day_night = as.factor(day_night)) %>%
-      select(driver_id, day_night)
+      select(driver_id, day_night) %>%
+      ungroup()
     
-  # weekends
-  # FIX TO RATIO OF WEEKEND RIDES TO WEEKDAY RIDES
-    weekends <- accepted %>%
-      mutate(day = day(accepted_mean)) %>%
+  # weekend:weekdays ratio
+    
+    weekends <- ride_info_drivers %>%
+      filter(event == "accepted_at") %>%
+      select(driver_id, timestamp3) %>%
+      mutate(day = day(timestamp3)) %>%
       mutate(weekend = case_when((day == 6 | day == 7) ~ "weekend",
-                                   TRUE ~ "weekday"
+                                    TRUE ~ "weekday"
       )) %>%
-      mutate(weekend = as.factor(weekend)) %>%
-      select(driver_id, weekend)
+      filter(weekend == "weekend") %>%
+      group_by(driver_id) %>%
+      summarize(weekend_count = n()) %>%
+      ungroup()
+    
+    weekdays <- ride_info_drivers %>%
+      filter(event == "accepted_at") %>%
+      select(driver_id, timestamp3) %>%
+      mutate(day = day(timestamp3)) %>%
+      mutate(weekend = case_when((day == 6 | day == 7) ~ "weekend",
+                                 TRUE ~ "weekday"
+      )) %>%
+      filter(weekend == "weekday") %>%
+      group_by(driver_id) %>%
+      summarize(weekday_count = n()) %>%
+      ungroup()
+    
+    weekends_weekdays_ratio <- full_join(weekends, weekdays, by = "driver_id") 
+    
+    weekends_weekdays_ratio <- weekends_weekdays_ratio %>% 
+      mutate(weekends_weekdays_ratio = weekend_count / weekday_count)
 
 # driver factors dataset
     driver_revenue <- ride_info_drivers %>%
@@ -254,7 +288,6 @@ cdf %>%
       summarize(driver_revenue = max(driver_revenue))
     
     driver_revenue <- left_join(driver_revenue, days_with_lyft)
-    # FIX THE EVENT MEANS (find a way to only factor time and not date)
     driver_revenue <- left_join(driver_revenue, requested)
     driver_revenue <- left_join(driver_revenue, accepted)
     driver_revenue <- left_join(driver_revenue, arrived)
@@ -265,7 +298,7 @@ cdf %>%
     driver_revenue <- left_join(driver_revenue, requested_dropped_off)
     driver_revenue <- left_join(driver_revenue, month)
     driver_revenue <- left_join(driver_revenue, day_night)
-    driver_revenue <- left_join(driver_revenue, weekends) # FIX
+    driver_revenue <- left_join(driver_revenue, weekends) 
       
 # simple correlation tests in order to eliminate some factors
 # with correlation plots
