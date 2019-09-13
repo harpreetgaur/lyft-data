@@ -101,7 +101,6 @@ ride_info_drivers %>%
                  bins = 20) + 
   geom_vline(xintercept = driver_revenue_median, lwd = 1.25,
              linetype = "dashed", color = "blue") +
-  labs(title = "Distribution of Driver Lifetime Values") +
   xlab("Driver Lifetime Value (Dollars)") +
   ylab("Count") 
 
@@ -157,14 +156,22 @@ cdf %>%
     ride_info_drivers %>%
       group_by(driver_id) %>%
       summarize(days_with_lyft = max(days_with_lyft)) %>%
+      mutate(days_with_lyft = as.numeric(days_with_lyft)) %>%
+      ungroup() %>%
       ggplot() +
       geom_histogram(aes(x = days_with_lyft),
                      color = "white",
-                     fill = "indianred1") + 
+                     fill = "indianred1"
+                      ) + 
       labs(title = "Distribution of Drivers' Days with Lyft") + 
       xlab("Days With Lyft") + 
       ylab("Count")
     
+  # number of rides
+    num_rides <- ride_info_drivers %>%
+      group_by(driver_id) %>%
+      distinct(ride_id) %>%
+      summarize(num_rides = n())
     
   # mean requested times
     requested <- ride_info_drivers %>%
@@ -242,14 +249,16 @@ cdf %>%
       filter(event == "accepted_at") %>%
       select(driver_id, timestamp3) %>%
       mutate(hour = hour(timestamp3)) %>%
+      group_by(driver_id) %>%
+      summarize(hour = mean(hour)) %>%
+      ungroup() %>%
       mutate(day_night = case_when((hour >= 6 & hour < 12) ~ "morning",
                                    (hour >= 12 & hour < 18) ~ "afternoon",
                                    (hour < 6 ) ~ "night",
                                    TRUE ~ "evening"
                                    )) %>%
       mutate(day_night = as.factor(day_night)) %>%
-      select(driver_id, day_night) %>%
-      ungroup()
+      select(driver_id, day_night)
     
   # weekend:weekdays ratio
     
@@ -288,6 +297,7 @@ cdf %>%
       summarize(driver_revenue = max(driver_revenue))
     
     driver_revenue <- left_join(driver_revenue, days_with_lyft)
+    driver_revenue <- left_join(driver_revenue, num_rides)
     driver_revenue <- left_join(driver_revenue, requested)
     driver_revenue <- left_join(driver_revenue, accepted)
     driver_revenue <- left_join(driver_revenue, arrived)
@@ -299,10 +309,28 @@ cdf %>%
     driver_revenue <- left_join(driver_revenue, month)
     driver_revenue <- left_join(driver_revenue, day_night)
     driver_revenue <- left_join(driver_revenue, weekends) 
-      
+
+### Data Visualization + Statistical Tests (Parametric & Non-Parametric)
+driver_revenue %>%
+  mutate(num_rides_group = case_when((num_rides < 200) ~ "0 - 200",
+                                     (num_rides < 400) ~ "200 - 400",
+                                     (num_rides < 600) ~ "400 - 600",
+                                     (num_rides < 800) ~ "600 - 800",
+                                     TRUE ~ "800+"
+  )) %>%
+  mutate(num_rides_group = as.factor(num_rides_group)) %>%
+  ggplot(aes(x = days_with_lyft, y = driver_revenue)) +
+  geom_point(aes(color = num_rides_group)) +
+  ylab("Driver Revenue, Dollars") + 
+  xlab("Days with Lyft") +
+  geom_smooth(aes(x = days_with_lyft, y = driver_revenue), group = 1, alpha = 0.25) + 
+  scale_y_continuous(labels = comma) +
+  labs(color = "Number of Rides")
 # simple correlation tests in order to eliminate some factors
 # with correlation plots
 # (for month, day/night one-way ANOVA with Tukey HSD)
+    
+    
 
 # exponential pdfs for time lapses
 
