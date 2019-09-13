@@ -254,6 +254,7 @@ cdf %>%
       summarize(driver_revenue = max(driver_revenue))
     
     driver_revenue <- left_join(driver_revenue, days_with_lyft)
+    # FIX THE EVENT MEANS (find a way to only factor time and not date)
     driver_revenue <- left_join(driver_revenue, requested)
     driver_revenue <- left_join(driver_revenue, accepted)
     driver_revenue <- left_join(driver_revenue, arrived)
