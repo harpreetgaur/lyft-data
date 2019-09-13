@@ -239,7 +239,7 @@ cdf %>%
       select(driver_id, day_night)
     
   # weekends
-  # FIX TO AVERAGE NUMBER OF RIDES IN THE WEEKENDS
+  # FIX TO RATIO OF WEEKEND RIDES TO WEEKDAY RIDES
     weekends <- accepted %>%
       mutate(day = day(accepted_mean)) %>%
       mutate(weekend = case_when((day == 6 | day == 7) ~ "weekend",
