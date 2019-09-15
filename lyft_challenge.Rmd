@@ -278,9 +278,7 @@ date_density <- date_density %>%
     requested_arrived <- full_join(requested, arrived, by = "driver_id")
     
     requested_arrived <- requested_arrived %>%
-      mutate(requested_arrived_mean = arrived_mean - requested_mean,
-             requested_arrived_total = arrived_total - requested_total,
-             requested_arrived = as.numeric(requested_arrived_mean) / as.numeric(requested_arrived_total)) %>%
+      mutate(requested_arrived = arrived_mean - requested_mean) %>%
       select(driver_id, requested_arrived) 
     
   # accepted - arrived time lapse
@@ -288,9 +286,7 @@ date_density <- date_density %>%
     accepted_arrived <- full_join(accepted, arrived, by = "driver_id")
     
     accepted_arrived <- accepted_arrived %>%
-      mutate(accepted_arrived_mean = arrived_mean - accepted_mean,
-             accepted_arrived_total = arrived_total - accepted_total,
-             accepted_arrived = as.numeric(accepted_arrived_mean) / as.numeric(accepted_arrived_total)) %>%
+      mutate(accepted_arrived = arrived_mean - accepted_mean) %>%
       select(driver_id, accepted_arrived) 
     
   # requested - dropped off time lapse
@@ -298,9 +294,7 @@ date_density <- date_density %>%
     requested_dropped_off <- full_join(requested, dropped_off, by = "driver_id")
     
     requested_dropped_off <- requested_dropped_off %>%
-      mutate(requested_dropped_off_mean = dropped_off_mean - requested_mean,
-             requested_dropped_off_total = dropped_off_total - requested_total,
-             requested_dropped_off = as.numeric(requested_dropped_off_mean) / as.numeric(requested_dropped_off_total)) %>%
+      mutate(requested_dropped_off = dropped_off_mean - requested_mean) %>%
       select(driver_id, requested_dropped_off) 
     
   # day/night
@@ -377,8 +371,8 @@ date_density <- date_density %>%
     driver_revenue <- driver_revenue %>%
       mutate(num_prime_num_rides = prime_time_counts / num_rides)
 ``` 
-
-### Data Visualization + Statistical Tests (Parametric & Non-Parametric)
+```{r correlation}
+### Statistical Tests (Parametric & Non-Parametric)
 
 # simple correlation tests in order to eliminate some factors
 # r - linear correlation (+1 is a strong positive relationship,
@@ -387,10 +381,7 @@ date_density <- date_density %>%
 # R^2 - how much of the variation of the dependent variable
 #       can be attributed to the independent variable
 
-# FIX ME
-# FIX ME
-# FIX ME
-# FIX ME
+
 
 # days_with_lyft
 # num_rides
@@ -402,26 +393,17 @@ date_density <- date_density %>%
 # requested_arrived
 # accepted_arrived
 # requested_dropped_off
-# weekend:week ratio
-# onboard_month
-# onboard_day
-# average_distance
-# average_duration
-# total_distance
-# total_duration
-# normalized average distance
-# normalized average duration
+## day_night <- not being included with correlation
+# mean_mph
+# prime_time_counts
+# num_prime_num_rides
 
 
 # removing NAs
 driver_revenue2 <- na.omit(driver_revenue)
 
-rsq <- rep(0,21)
-p_values <- rep(0,21)
-
-# Tried a for loop but loading vectors from lists are a little tricky
-# (loading vectors from a vector of strings while converting the strings
-# to their respective object names is a possible solution...)
+rsq <- rep(0,13)
+p_values <- rep(0,13)
 
 possible_features <- c("Days With Lyft",
                        "Number of Rides",
@@ -433,17 +415,9 @@ possible_features <- c("Days With Lyft",
                        "Average Requested-Arrived Timelapse",
                        "Average Accepted-Arrived Timelapse",
                        "Average Requested-Dropped Off Timelapse",
-                       "Weekend:Weekday Ratio",
-                       "Onboard Month",
-                       "Onboard Day",
-                       "Total Distance",
-                       "Total Duration",
-                       "Mean Distance",
-                       "Mean Duration",
-                       "Normalized Mean Distance",
-                       "Normalized Mean Duration",
+                       "Average Speed (MPH)",
                        "Number of Prime Time Rides",
-                       "Number of Prime Time Rides: Number of Normal Rides")
+                       "Prime Time Rides:Normal Rides Ratio")
 
 rsq[1] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$days_with_lyft)))^2
 rsq[2] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$num_rides)))^2
@@ -455,17 +429,9 @@ rsq[7] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$droppe
 rsq[8] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$requested_arrived)))^2
 rsq[9] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$accepted_arrived)))^2
 rsq[10] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$requested_dropped_off)))^2
-rsq[11] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$weekends_weekdays_ratio)))^2
-rsq[12] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$onboard_month)))^2
-rsq[13] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$onboard_day)))^2
-rsq[14] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$total_distance)))^2
-rsq[15] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$total_duration)))^2
-rsq[16] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$average_distance)))^2
-rsq[17] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$average_duration)))^2
-rsq[18] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$normalized_average_distance)))^2
-rsq[19] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$normalized_average_duration)))^2
-rsq[20] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$prime_time_counts)))^2
-rsq[21] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$normalized_prime_time_counts)))^2
+rsq[11] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$mean_mph)))^2
+rsq[12] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$prime_time_counts)))^2
+rsq[13] <- (cor(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$num_prime_num_rides)))^2
 
 p_values[1] <- cor.test(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$days_with_lyft))$p.value
 p_values[2] <- cor.test(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$num_rides))$p.value
@@ -477,29 +443,21 @@ p_values[7] <- cor.test(driver_revenue2$driver_revenue, as.numeric(driver_revenu
 p_values[8] <- cor.test(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$requested_arrived))$p.value
 p_values[9] <- cor.test(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$accepted_arrived))$p.value
 p_values[10] <- cor.test(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$requested_dropped_off))$p.value
-p_values[11] <- cor.test(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$weekends_weekdays_ratio))$p.value
+p_values[11] <- cor.test(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$mean_mph))$p.value
+p_values[12] <- cor.test(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$prime_time_counts))$p.value
+p_values[13] <- cor.test(driver_revenue2$driver_revenue, as.numeric(driver_revenue2$num_prime_num_rides))$p.value
 
-cor_dfr <- data_frame(possible_features, rsq)#, p_values)
+cor_dfr <- data_frame(possible_features, rsq, p_values)
 
 cor_dfr %>%
   ggplot() +
-  geom_col(aes(x = possible_features, y = rsq, fill = possible_features)) +
+  geom_col(aes(x = reorder(possible_features, rsq), y = rsq, fill = possible_features)) +
   coord_flip() +
   ylab("R-Squared Values") +
   xlab("Possible Features") +
   labs(title = "Two-Sided Correlation Tests") +
-  theme(legend.position = "none")
+  theme(legend.position = "none") 
 
-# The only Rsq Value that's promising is the Rsq Value for the number
-# of rides
-# ONE CONCLUSION: LIFETIME DRIVER VALUE IS NOT RELATED TO
-# THE SPEED OF THE DRIVER
-
-# LIFETIME DRIVER VALUE IS ALSO BARELY RELATED TO HOW LONG THE 
-# DRIVER HAS BEEN WITH LYFT AND HOW MUCH HE/SHE DECIDES TO
-# DRIVE ON WEEKENDS COMPARED TO WEEKDAYS
-
-# correlation plot
 
 driver_revenue %>%
   mutate(num_rides_group = case_when((num_rides < 200) ~ "0 - 200",
@@ -533,85 +491,79 @@ driver_revenue %>%
   geom_smooth(aes(x = num_rides, y = driver_revenue), group = 1, alpha = 0.25, color = "red") + 
   scale_y_continuous(labels = comma) +
   labs(color = "Days With Lyft")
+```
 
-
-# (for month, day/night one-way ANOVA with Tukey HSD)
+```{r day/night analysis}
 revenue <- driver_revenue$driver_revenue
-top_month <- as.factor(as.integer(driver_revenue$top_month))
 day_night <- as.factor(driver_revenue$day_night)
 
-anova(lm(revenue ~ top_month)) 
-# significant p-value reject the null
-# means are statistically different
-
-# Analysis of Variance Table
-# 
-# Response: revenue
-# Df     Sum Sq    Mean Sq F value    Pr(>F)    
-# top_month   2 1.1894e+10 5947090533  45.011 < 2.2e-16 ***
-#   Residuals 834 1.1019e+11  132125327                      
-# ---
-#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
-
-summary(lm(revenue ~ top_month)) # LOW R-SQUARED = LOW EFFECT SIZE... 
-
-TukeyHSD(aov(lm(revenue ~ top_month))) # multiple comparisions test
-# all p-values are significant, reject the null
-
-# Tukey multiple comparisons of means
-# 95% family-wise confidence level
-# 
-# Fit: aov(formula = lm(revenue ~ top_month))
-# 
-# $top_month
-# diff       lwr       upr     p adj
-# 4-3  9024.513  3693.787 14355.238 0.0002257
-# 5-3 15261.708 10022.219 20501.198 0.0000000
-# 5-4  6237.196  4276.770  8197.621 0.0000000
-
-anova(lm(revenue ~ day_night)) # significant p-value
-summary(lm(revenue ~ day_night)) # Low effect size
-TukeyHSD(aov(lm(revenue ~ day_night)))
-# Tukey multiple comparisons of means
-# 95% family-wise confidence level
-# 
-# Fit: aov(formula = lm(revenue ~ day_night))
-# 
-# $day_night
-# diff        lwr       upr     p adj
-# evening-afternoon  -6983.2703 -11429.143 -2537.397 0.0003350
-# morning-afternoon   -947.1945  -3831.179  1936.790 0.8326758
-# night-afternoon   -13092.4205 -43956.873 17772.032 0.6945641
-# morning-evening     6036.0758   1022.705 11049.446 0.0107793
-# night-evening      -6109.1502 -37244.836 25026.536 0.9578750
-# night-morning     -12145.2260 -43096.519 18806.067 0.7435521
 driver_revenue2 %>%
-  ggplot() + 
-  geom_boxplot(aes(x = as.factor(as.integer(top_month)), y = driver_revenue, 
-                   fill = as.factor(as.integer(top_month)))) +
-  xlab("Top Month") +
-  ylab("Driver Revenue") + 
-  theme(legend.position = "none") +
-  scale_y_continuous(labels = comma)
-
-driver_revenue2 %>%
+  mutate(day_night = case_when((day_night == "morning") ~ "Morning",
+                               (day_night == "afternoon") ~ "Afternoon",
+                               (day_night == "evening") ~ "Evening",
+                               (day_night == "night") ~ "Night"
+    
+  )) %>%
   ggplot() + 
   geom_boxplot(aes(x = as.factor(day_night), y = driver_revenue,
-                   fill = as.factor(day_night)))
-
-# Majority of all rides are in the afternoon
-driver_revenue2 %>%
-  ggplot() + 
-  geom_point(aes(x = num_rides, y = driver_revenue,
-                 color = as.factor(day_night)))
+                   fill = as.factor(day_night))) +
+  theme(axis.text.x = element_text(angle = 45)) +
+  xlab("Most Active Time of Day") +
+  ylab("Driver Revenue") +
+  scale_fill_discrete(name = "Time of Day")
 
 driver_revenue2 %>%
   filter(day_night != "night") %>%
+  mutate(day_night = case_when((day_night == "morning") ~ "Morning",
+                               (day_night == "afternoon") ~ "Afternoon",
+                               (day_night == "evening") ~ "Evening",
+                               (day_night == "night") ~ "Night"
+    
+  )) %>%
   ggplot() + 
-  geom_bar(aes(x = day_night, fill = day_night), alpha = 0.5)
+  geom_boxplot(aes(x = as.factor(day_night), y = driver_revenue,
+                   fill = as.factor(day_night))) +
+  theme(axis.text.x = element_text(angle = 45)) +
+  xlab("Most Active Time of Day") +
+  ylab("Driver Revenue") +
+  scale_fill_discrete(name = "Time of Day")
 
-# checking for factor interactions
-# 
+driver_revenue2 %>%
+  filter(day_night != "night") %>%
+  mutate(day_night = case_when((day_night == "morning") ~ "Morning",
+                               (day_night == "afternoon") ~ "Afternoon",
+                               (day_night == "evening") ~ "Evening",
+                               (day_night == "night") ~ "Night"
+    
+  )) %>%
+  ggplot() + 
+  geom_bar(aes(x = day_night, fill = day_night),
+           color = "black",
+           alpha = 0.5) +
+  xlab("Most Active Time of Day") +
+  ylab("Count") + 
+  scale_fill_discrete(name = "Time of Day")
+
+ride_info_drivers %>%
+  filter(event == "accepted_at") %>%
+      select(driver_id, timestamp3) %>%
+      mutate(hour = hour(timestamp3)) %>%
+      mutate(day_night = case_when((hour >= 6 & hour < 12) ~ "Morning",
+                                   (hour >= 12 & hour < 18) ~ "Afternoon",
+                                   (hour < 6 ) ~ "Night",
+                                   TRUE ~ "Evening"
+                                   )) %>%
+  ggplot(aes(x = day_night)) +
+  geom_bar(aes(fill = day_night), 
+           color = "black", 
+           alpha = 0.5) +
+  scale_y_continuous(labels = comma) +
+  xlab("Time of Day") +
+  ylab("Ride Count") +
+  theme(legend.position = "none") +
+  ggtitle("Number of Rides By Time of Day")
+
+```
 driver_revenue3 <- driver_revenue2 %>%
   select(driver_revenue, total_distance, total_duration, num_rides,prime_time_counts, days_with_lyft, driver_id, day_night) %>%
   mutate(days_with_lyft = as.numeric(days_with_lyft))
@@ -680,5 +632,4 @@ driver_revenue3 %>%
   
 
 # k-fold validation to check for RMSE and adjusted RSq
-
 
