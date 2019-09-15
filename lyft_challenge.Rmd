@@ -18,6 +18,7 @@ library(broom)
 library(scales)
 library(lubridate)
 library(modelr)
+library(reshape2)
 
 # plot settings
 theme_set(theme_bw())
@@ -374,7 +375,8 @@ date_density <- date_density %>%
 ```{r correlation}
 ### Statistical Tests (Parametric & Non-Parametric)
 
-# simple correlation tests in order to eliminate some factors
+# simple correlation tests in order to see what factors
+# matter the most when it comes to driver revenue
 # r - linear correlation (+1 is a strong positive relationship,
 #                         -1 is a strong negative relationship,
 #                         0 means no relationship)
@@ -564,23 +566,29 @@ ride_info_drivers %>%
   ggtitle("Number of Rides By Time of Day")
 
 ```
+
+```{r correlation matrix}
+# compact dataframe is made to create
+# a correlation matrix heatmap, to check for interdependent
+# variables
 driver_revenue3 <- driver_revenue2 %>%
-  select(driver_revenue, total_distance, total_duration, num_rides,prime_time_counts, days_with_lyft, driver_id, day_night) %>%
-  mutate(days_with_lyft = as.numeric(days_with_lyft))
+  select(num_rides,prime_time_counts, days_with_lyft, day_night) %>%
+  mutate(days_with_lyft = as.numeric(days_with_lyft)) %>%
+  mutate(day_night = case_when((day_night == "morning") ~ 1,
+                               (day_night == "afternoon") ~ 2,
+                               (day_night == "evening") ~ 3,
+                               (day_night == "night") ~ 4
+    
+  ))
 
 cormat <- round(cor(driver_revenue3),2)
-
-library(reshape2)
-melted_cormat <- melt(cormat)
-
-ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
-  geom_tile()
 
 get_lower_tri<-function(cormat){
   cormat[upper.tri(cormat)] <- NA
   return(cormat)
 }
-# Get upper triangle of the correlation matrix
+
+# upper triangle of the correlation matrix
 get_upper_tri <- function(cormat){
   cormat[lower.tri(cormat)]<- NA
   return(cormat)
@@ -589,11 +597,10 @@ get_upper_tri <- function(cormat){
 upper_tri <- get_upper_tri(cormat)
 upper_tri
 
-# Melt the correlation matrix
-library(reshape2)
+# melt the correlation matrix
 melted_cormat <- melt(upper_tri, na.rm = TRUE)
-# Heatmap
-library(ggplot2)
+
+# correlation matrix heatmap
 ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
   geom_tile(color = "white")+
   scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
@@ -601,35 +608,193 @@ ggplot(data = melted_cormat, aes(Var2, Var1, fill = value))+
                        name="Pearson\nCorrelation") +
   theme_minimal()+ 
   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
-                                   size = 12, hjust = 1))+
-  coord_fixed()
-# To determine the most important driver lifetime value factors
-# a linear regression is being used with the driver lifetime value
-# as the response variable
-# model creation
-driver_revenue3$day_night <- as.factor(driver_revenue3$day_night)
-model <- lm(driver_revenue ~  day_night + (days_with_lyft * prime_time_counts *
-                                                num_rides
-                                                ),data = driver_revenue3)
-summary(model)
+                                   size = 12, hjust = 1)) +
+  coord_fixed() +
+  xlab("") + 
+  ylab("")
+
+```
 
 
+```{r model creation}
+# linear regression model to calculate projected lifetime of a driver
 
-driver_revenue3 %>%
-  arrange(driver_revenue) %>%
+# response variable: days_with_lyft
+
+# possible features: 
+# driver revenue 
+# average number of rides per week *
+# average trip_duration * 
+# average trip_distance * 
+# average requested_arrived timelapse 
+# average accepted_arrived timelapse
+# average accepted requested_dropped_off timelapse
+# day_night * (might need to convert to numbers)
+# num_prime_rides:num_rides ratio
+
+driver_revenue2 <- driver_revenue2 %>%
+  mutate(days_with_lyft = as.numeric(days_with_lyft)) %>%
+  mutate(weeks_with_lyft = days_with_lyft / 7) %>%
+  mutate(mean_rides_per_week = num_rides / weeks_with_lyft)
+
+total_trip_stats <- ride_info %>%
+  group_by(driver_id) %>%
+  summarize(total_duration = sum(ride_duration),
+         total_distance = sum(ride_distance))
+
+driver_revenue2 <- full_join(total_trip_stats, driver_revenue2,
+                             by = "driver_id")
+
+driver_revenue2 <- driver_revenue2 %>%
+  mutate(mean_duration = total_duration / num_rides,
+         mean_distance = total_distance / num_rides)
+
+model1 <- lm(days_with_lyft ~ (driver_revenue + 
+                               mean_rides_per_week + 
+                               (mean_duration * 
+                               mean_distance * 
+                                 requested_dropped_off) +
+                                 (requested_arrived *
+                                 accepted_arrived) + 
+                                 day_night +
+                                 num_prime_num_rides
+),
+data = driver_revenue2)
+
+summary(model1)
+
+# highest non-interaction insignificant p-value is
+# mean_duration, removing it for model 2
+
+model2 <- lm(days_with_lyft ~ (driver_revenue + 
+                               mean_rides_per_week + 
+                               (mean_distance * 
+                                 requested_dropped_off) +
+                                 (requested_arrived *
+                                 accepted_arrived) + 
+                                 day_night + 
+                                 + 
+                                 num_prime_num_rides
+),
+data = driver_revenue2)
+
+summary(model2)
+
+# highest non-interaction insignificant p-value is 
+# mean requested - dropped off timelapse
+# removing it for model3
+
+model3 <- lm(days_with_lyft ~ (driver_revenue + 
+                               mean_rides_per_week + 
+                               mean_distance +
+                                 (requested_arrived *
+                                 accepted_arrived) + 
+                                 day_night + 
+                                 + 
+                                 num_prime_num_rides
+),
+data = driver_revenue2)
+
+summary(model3)
+
+# highest non-interaction insignificant p-value(s) is 
+# time of day, removing it for model4
+
+model4 <- lm(days_with_lyft ~ (driver_revenue + 
+                               mean_rides_per_week + 
+                               mean_distance +
+                                 (requested_arrived *
+                                 accepted_arrived) + 
+                                 num_prime_num_rides
+),
+data = driver_revenue2)
+
+summary(model4)
+
+# highest non-interaction insignificant p-value is 
+# mean requested-arrived timelapse, removing it for model5
+
+model5 <- lm(days_with_lyft ~ (driver_revenue + 
+                               mean_rides_per_week + 
+                               mean_distance +
+                                 accepted_arrived + 
+                                 num_prime_num_rides
+),
+data = driver_revenue2)
+
+summary(model5)
+
+# the only insignificant p-value is 
+# mean accepted_arrived timelapse, removing it for model6
+
+model6 <- lm(days_with_lyft ~ (driver_revenue + 
+                               mean_rides_per_week + 
+                               mean_distance +
+                                 num_prime_num_rides
+),
+data = driver_revenue2)
+
+summary(model6)
+
+# mean distance and mean_rides_per_week is intrinsically
+# related, accounting for interactions in model6_1
+
+model6_1 <- lm(days_with_lyft ~ (driver_revenue + 
+                               (mean_rides_per_week * 
+                               mean_distance) +
+                                 num_prime_num_rides
+),
+data = driver_revenue2)
+
+summary(model6_1)
+
+# driver_revenue has the largest coefficient in the model...
+# graphing driver_revenue against days_with_lyft 
+# to see if polynomial regression is necessary.
+# a loess fit line is used as a guide
+
+driver_revenue2 %>%
+  ggplot(aes(x = driver_revenue, y = days_with_lyft)) + 
+  geom_point(color = "red") +
+  geom_smooth(color = "blue",
+              method = "loess") + 
+  xlab("Driver Revenue") + 
+  ylab("Days With Lyft") 
+  
+
+# there is a curve that would be better represented with 
+# polynomial regression
+
+# model6_2 <- lm(days_with_lyft ~ (poly(driver_revenue, 2,
+#                                       raw = TRUE) + 
+#                                (mean_rides_per_week * 
+#                                mean_distance) +
+#                                  num_prime_num_rides
+# ),
+# data = driver_revenue2)
+# 
+# model6_3 <- lm(days_with_lyft ~ (poly(driver_revenue, 3,
+#                                       raw = TRUE) + 
+#                                (mean_rides_per_week * 
+#                                mean_distance) +
+#                                  num_prime_num_rides
+# ),
+# data = driver_revenue2)
+# 
+# summary(model6_2)
+# summary(model6_3)
+
+
+driver_revenue2 <- full_join(driver, driver_revenue2)
+
+driver_revenue2 %>%
+  arrange(days_with_lyft) %>%
   mutate(rank = row_number()) %>%
-  add_predictions(model) %>%
-  ggplot(aes(x = rank, y = driver_revenue)) + 
+  add_predictions(model6) %>%
+  ggplot(aes(x = rank, y = days_with_lyft)) + 
   geom_point() +
   geom_smooth(aes(y = pred), color = "red")
-
-driver_revenue3 %>%
-  add_predictions(model) %>%
-  ggplot(aes(x = pred, y = driver_revenue)) + 
-  geom_point() + 
-  geom_abline(aes(slope = 1, intercept = 0), 
-              color = 'red', lwd = 1.5) 
   
 
 # k-fold validation to check for RMSE and adjusted RSq
-
+```
