@@ -759,42 +759,105 @@ driver_revenue2 %>%
   geom_smooth(color = "blue",
               method = "loess") + 
   xlab("Driver Revenue") + 
-  ylab("Days With Lyft") 
+  ylab("Days With Lyft") +
+  scale_x_continuous(labels = comma)
+
+# since the loess fit line has heavy curvature polynomial
+# regression will allow the model to represent the data
+# better
+
   
 
-# there is a curve that would be better represented with 
-# polynomial regression
+# k-fold validation to check for RMSE and adjusted RSq
+```
 
-# model6_2 <- lm(days_with_lyft ~ (poly(driver_revenue, 2,
-#                                       raw = TRUE) + 
-#                                (mean_rides_per_week * 
-#                                mean_distance) +
-#                                  num_prime_num_rides
-# ),
-# data = driver_revenue2)
-# 
-# model6_3 <- lm(days_with_lyft ~ (poly(driver_revenue, 3,
-#                                       raw = TRUE) + 
-#                                (mean_rides_per_week * 
-#                                mean_distance) +
-#                                  num_prime_num_rides
-# ),
-# data = driver_revenue2)
-# 
-# summary(model6_2)
-# summary(model6_3)
+```{r k fold validation}
+# in order to determine which order to use for polynomial
+# regression, k-fold validation is performed.
+# For five loops the data is randomly split into 5 sections.
+# In each loop, four sections is used to train the model 
+# and one section is used to validate the model 
+# the RMSE value is taken to assess model performance 
+# and for each polynomial order, the average RMSE is recorded
 
+# the model with the lowest RMSE is recommended 
 
-driver_revenue2 <- full_join(driver, driver_revenue2)
+fold <- 5
+k <- 10
+average_rmse <- rep(0,k)
+average_se <- rep(0,k)
+
+for(i in 1:k){
+  
+  rmse <- rep(0,fold)
+  for(j in 1:fold){
+    
+  training_setj <- sampled_data %>%
+  mutate(cross = (row_number() + 5) %% 5) %>%
+  filter(cross != j - 1)
+
+  validation_setj <- sampled_data %>%
+  mutate(cross = (row_number() + 5) %% 5) %>%
+  filter(cross == j - 1)
+  
+  
+  
+  rmse[j] <- rmse(lm(days_with_lyft ~ (poly(driver_revenue, i, raw = TRUE) + 
+                               (mean_rides_per_week * 
+                               mean_distance) +
+                                 num_prime_num_rides
+),
+data = training_set), validation_setj)
+
+  
+  }
+  
+  average_rmse[i] <- mean(rmse)
+  average_se[i] <- sd(rmse)/length(rmse)
+}
+
+orders <- c(1:10)
+
+data.frame(orders, average_rmse, average_se) %>%
+  ggplot(aes(x = orders)) +
+  geom_point(aes(y = average_rmse), color = 'black') + 
+  geom_line(aes(y = average_rmse), color = 'black') + 
+  geom_linerange(aes(ymin = average_rmse - average_se,
+                     ymax = average_rmse + average_se), color = '#00BFC4') + 
+  ylab("Average RMSE (Days)") + 
+  xlab("Orders of Polynomial Regression")
+
+match(min(average_rmse), average_rmse)
+average_rmse[match(min(average_rmse), average_rmse)]
 
 driver_revenue2 %>%
   arrange(days_with_lyft) %>%
   mutate(rank = row_number()) %>%
-  add_predictions(model6) %>%
+  add_predictions(lm(days_with_lyft ~ (poly(driver_revenue, 10, raw = TRUE) + 
+                               (mean_rides_per_week * 
+                               mean_distance) +
+                                 num_prime_num_rides
+),
+data = driver_revenue2)) %>%
   ggplot(aes(x = rank, y = days_with_lyft)) + 
   geom_point() +
-  geom_smooth(aes(y = pred), color = "red")
-  
+  geom_smooth(aes(y = pred), color = "red") +
+  ylab("Days with Lyft") +
+  xlab("Driver Rank (Based on Number of Days With Lyft)")
+```
 
-# k-fold validation to check for RMSE and adjusted RSq
+```{r average projected lifetime}
+
+# the average projected lifetime of a driver within the 
+# timeframe of ~3 months can be determined by averaging the 
+# outcomes of the model
+
+driver_revenue2 %>%
+  add_predictions(lm(days_with_lyft ~ (poly(driver_revenue, 10, raw = TRUE) + 
+                               (mean_rides_per_week * 
+                               mean_distance) +
+                                 num_prime_num_rides
+),
+data = driver_revenue2)) %>%
+  summarize(projected_lifetime = mean(pred, na.rm = TRUE))
 ```
